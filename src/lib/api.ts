@@ -1,10 +1,12 @@
 import axios from "axios";
 import { Drama, Episode } from "@/types/drama";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 const BASE_URL =
   typeof window === "undefined"
     ? "https://dramabox.sansekai.my.id/api/dramabox"
-    : "/api/proxy";
+    : `${BASE_PATH}/api/proxy`;
 
 const api = axios.create({
   baseURL: BASE_URL,
