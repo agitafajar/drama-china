@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import axios from "axios";
+import { Readable } from "stream";
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get("url");
@@ -11,33 +13,27 @@ export async function GET(request: NextRequest) {
     const targetUrl = decodeURIComponent(url);
 
     // Filter headers to forward
-    const headers = new Headers();
+    const headers: Record<string, string> = {};
     const allowedHeaders = ["range", "user-agent", "accept", "referer"];
 
     request.headers.forEach((value, key) => {
       if (allowedHeaders.includes(key.toLowerCase())) {
-        headers.set(key, value);
+        headers[key] = value;
       }
     });
 
-    // Make request to video server
-    const response = await fetch(targetUrl, {
+    // Make request to video server using axios
+    const response = await axios.get(targetUrl, {
       headers: headers,
-      // Important to disable caching or handle it properly for streaming
-      cache: "no-store",
+      responseType: "stream",
+      validateStatus: () => true, // Accept all status codes to forward them
     });
-
-    if (!response.ok) {
-      return new NextResponse(`Failed to fetch video: ${response.statusText}`, {
-        status: response.status,
-      });
-    }
 
     // Prepare response headers
     const responseHeaders = new Headers();
     responseHeaders.set(
       "Content-Type",
-      response.headers.get("Content-Type") || "video/mp4"
+      response.headers["content-type"] || "video/mp4"
     );
     responseHeaders.set("Access-Control-Allow-Origin", "*");
 
@@ -50,13 +46,25 @@ export async function GET(request: NextRequest) {
     ];
 
     forwardResponseHeaders.forEach((header) => {
-      const value = response.headers.get(header);
+      const value = response.headers[header];
       if (value) {
-        responseHeaders.set(header, value);
+        responseHeaders.set(header, Array.isArray(value) ? value[0] : value);
       }
     });
 
-    return new NextResponse(response.body, {
+    // Axios data is a stream in Node.js environment
+    const stream = response.data as Readable;
+
+    // Convert Node.js Readable stream to Web ReadableStream
+    const webStream = new ReadableStream({
+      start(controller) {
+        stream.on("data", (chunk) => controller.enqueue(chunk));
+        stream.on("end", () => controller.close());
+        stream.on("error", (err) => controller.error(err));
+      },
+    });
+
+    return new NextResponse(webStream, {
       status: response.status,
       headers: responseHeaders,
     });

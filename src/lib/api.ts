@@ -10,6 +10,18 @@ const api = axios.create({
   baseURL: BASE_URL,
 });
 
+// Add global response interceptor for better error handling/debugging
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Log error for debugging purposes
+    const url = error.config?.url;
+    const method = error.config?.method?.toUpperCase();
+    console.error(`[API Error] ${method} ${url}:`, error.message);
+    return Promise.reject(error);
+  }
+);
+
 export const dramaApi = {
   getTrending: async () => {
     const { data } = await api.get<Drama[]>("/trending");
